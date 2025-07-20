@@ -1,0 +1,21 @@
+# Foundry
+cache/
+out/
+broadcast/
+
+# Environment variables
+.env
+
+# Node modules (if using npm/yarn)
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
