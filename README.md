@@ -80,6 +80,7 @@ Verify your deployment on [Sepolia Basescan](https://sepolia.basescan.org/) by s
 
 ## Contract Address
 
-After deployment, your contract will be available at:
-- **Base Sepolia**: `[To be filled after deployment]`
-# Storage-Contract
+✅ **Deployed Contract:**
+- **Base Mainnet**: `0x88B741DD4C0eF38587D374f7Cc5c485De2200Cf3`
+- **Basescan**: [View on Basescan](https://basescan.org/address/0x88B741DD4C0eF38587D374f7Cc5c485De2200Cf3)
+- **Deployment Method**: Remix IDE
