@@ -219,7 +219,16 @@ contract DecentralizedVoting {
     /**
      * @dev Get proposal details
      * @param proposalId ID of the proposal
-     * @return Proposal information
+     * @return id The proposal ID
+     * @return title The proposal title
+     * @return description The proposal description
+     * @return proposer Address of the proposal creator
+     * @return yesVotes Number of yes votes received
+     * @return noVotes Number of no votes received
+     * @return startTime When voting started (timestamp)
+     * @return endTime When voting ends (timestamp)
+     * @return executed Whether the proposal has been executed
+     * @return passed Whether the proposal passed (if executed)
      */
     function getProposal(uint256 proposalId) 
         external 
