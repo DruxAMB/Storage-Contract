@@ -144,12 +144,12 @@ contract SimpleNFT {
     
     /**
      * @dev Get balance of an address
-     * @param owner Address to check
+     * @param tokenOwner Address to check
      * @return Number of tokens owned
      */
-    function balanceOf(address owner) public view returns (uint256) {
-        require(owner != address(0), "Balance query for zero address");
-        return _balances[owner];
+    function balanceOf(address tokenOwner) public view returns (uint256) {
+        require(tokenOwner != address(0), "Balance query for zero address");
+        return _balances[tokenOwner];
     }
     
     /**
@@ -203,7 +203,25 @@ contract SimpleNFT {
      * @dev Safe transfer (same as transferFrom for simplicity)
      */
     function safeTransferFrom(address from, address to, uint256 tokenId) external {
-        transferFrom(from, to, tokenId);
+        require(_isApprovedOrOwner(msg.sender, tokenId), "Not approved or owner");
+        require(from == ownerOf(tokenId), "From address is not owner");
+        require(to != address(0), "Cannot transfer to zero address");
+        
+        // Clear approvals
+        _approve(address(0), tokenId);
+        
+        // Remove from sale if listed
+        if (tokensForSale[tokenId]) {
+            tokensForSale[tokenId] = false;
+            tokenPrices[tokenId] = 0;
+        }
+        
+        // Update balances
+        _balances[from]--;
+        _balances[to]++;
+        _owners[tokenId] = to;
+        
+        emit Transfer(from, to, tokenId);
     }
     
     /**
@@ -212,9 +230,9 @@ contract SimpleNFT {
      * @param tokenId Token to approve
      */
     function approve(address to, uint256 tokenId) external {
-        address owner = ownerOf(tokenId);
-        require(to != owner, "Approval to current owner");
-        require(msg.sender == owner || isApprovedForAll(owner, msg.sender), "Not approved or owner");
+        address tokenOwner = ownerOf(tokenId);
+        require(to != tokenOwner, "Approval to current owner");
+        require(msg.sender == tokenOwner || isApprovedForAll(tokenOwner, msg.sender), "Not approved or owner");
         
         _approve(to, tokenId);
     }
@@ -392,7 +410,11 @@ contract SimpleNFT {
     
     /**
      * @dev Get collection info
-     * @return Collection statistics
+     * @return currentSupply Current number of minted tokens
+     * @return maxTokens Maximum number of tokens that can be minted
+     * @return price Current mint price in wei
+     * @return active Whether minting is currently active
+     * @return contractOwner Address of the contract owner
      */
     function getCollectionInfo() external view returns (
         uint256 currentSupply,
