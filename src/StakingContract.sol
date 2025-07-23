@@ -396,12 +396,12 @@ contract StakingContract {
 
     /**
      * @dev Get contract statistics
-     * @return totalStakers Total number of unique stakers
      * @return totalStakedETH Total ETH staked
      * @return totalRewardsDistributed Total rewards paid out
      * @return contractETHBalance Current contract balance
-     * @return stakingActive Whether staking is enabled
-     * @return emergencyActive Whether emergency mode is active
+     * @return isStakingActive Whether staking is enabled
+     * @return isEmergencyActive Whether emergency mode is active
+     * @return tierCount Number of staking tiers
      */
     function getContractStats() 
         external 
@@ -410,8 +410,8 @@ contract StakingContract {
             uint256 totalStakedETH,
             uint256 totalRewardsDistributed,
             uint256 contractETHBalance,
-            bool stakingActive,
-            bool emergencyActive,
+            bool isStakingActive,
+            bool isEmergencyActive,
             uint256 tierCount
         ) 
     {

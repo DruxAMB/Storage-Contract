@@ -286,7 +286,7 @@ contract LotteryContract {
         nonce++;
         return uint256(keccak256(abi.encodePacked(
             block.timestamp,
-            block.difficulty,
+            block.prevrandao,
             msg.sender,
             nonce
         ))) % max;
@@ -296,12 +296,12 @@ contract LotteryContract {
      * @dev Internal function to find ticket owner by ticket number
      * @param lotteryId Lottery ID
      * @param ticketNumber Ticket number to find
-     * @return owner Address of ticket owner
+     * @return ticketOwner Address of ticket owner
      */
     function _findTicketOwner(uint256 lotteryId, uint256 ticketNumber) 
         internal 
         view 
-        returns (address owner) 
+        returns (address ticketOwner) 
     {
         for (uint256 i = 0; i < ticketCount; i++) {
             if (tickets[i].lotteryId == lotteryId && 
@@ -405,13 +405,13 @@ contract LotteryContract {
      * @dev Get user's ticket count for a lottery
      * @param lotteryId Lottery ID
      * @param user User address
-     * @return ticketCount Number of tickets owned
+     * @return userTicketCount Number of tickets owned
      */
     function getUserTicketCount(uint256 lotteryId, address user) 
         external 
         view 
         lotteryExists(lotteryId) 
-        returns (uint256 ticketCount) 
+        returns (uint256 userTicketCount) 
     {
         return lotteries[lotteryId].ticketCount[user];
     }
