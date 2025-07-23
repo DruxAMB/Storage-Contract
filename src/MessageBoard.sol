@@ -198,16 +198,16 @@ contract MessageBoard {
         ) 
     {
         require(messageId < messageCount, "Message does not exist");
-        Message memory msg = messages[messageId];
+        Message memory message = messages[messageId];
         return (
-            msg.id,
-            msg.author,
-            msg.content,
-            msg.timestamp,
-            msg.likes,
-            msg.replyCount,
-            msg.parentId,
-            msg.isReply
+            message.id,
+            message.author,
+            message.content,
+            message.timestamp,
+            message.likes,
+            message.replyCount,
+            message.parentId,
+            message.isReply
         );
     }
 
@@ -278,12 +278,12 @@ contract MessageBoard {
      * @dev Check if user has liked a message
      * @param messageId Message ID
      * @param user User address
-     * @return hasUserLiked Whether user has liked the message
+     * @return liked Whether user has liked the message
      */
     function hasUserLiked(uint256 messageId, address user) 
         external 
         view 
-        returns (bool hasUserLiked) 
+        returns (bool liked) 
     {
         require(messageId < messageCount, "Message does not exist");
         return hasLiked[messageId][user];
@@ -314,7 +314,7 @@ contract MessageBoard {
     /**
      * @dev Get user statistics
      * @param user User address
-     * @return messageCount Number of messages posted by user
+     * @return userMessageCount Number of messages posted by user
      * @return nickname User's display name
      * @return firstPostTime Timestamp of first post (0 if no posts)
      */
