@@ -395,9 +395,9 @@ contract SimpleToken {
 
     /**
      * @dev Get transfer settings
+     * @param account Address to check transfer settings for
      * @return enabled Whether transfers are enabled
      * @return whitelistModeActive Whether whitelist mode is active
-     * @return account Address to check
      * @return isBlacklisted Whether account is blacklisted
      * @return isWhitelisted Whether account is whitelisted
      */

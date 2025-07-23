@@ -38,12 +38,12 @@ contract EscrowContract {
     mapping(address => uint256[]) public buyerEscrows;
     mapping(address => uint256[]) public sellerEscrows;
     mapping(address => uint256[]) public arbiterEscrows;
-    
+
     uint256 public escrowCount;
     uint256 public arbiterFeePercent; // Fee percentage (in basis points, e.g., 250 = 2.5%)
     address public platformOwner;
     uint256 public platformFeePercent; // Platform fee (in basis points)
-    
+
     mapping(address => bool) public approvedArbiters;
     mapping(address => uint256) public arbiterFees; // Collected fees for arbiters
     mapping(address => uint256) public platformFees; // Collected platform fees
@@ -57,13 +57,33 @@ contract EscrowContract {
         uint256 amount,
         string description
     );
-    event PaymentDeposited(uint256 indexed escrowId, address indexed buyer, uint256 amount);
+    event PaymentDeposited(
+        uint256 indexed escrowId,
+        address indexed buyer,
+        uint256 amount
+    );
     event DeliveryConfirmed(uint256 indexed escrowId, address indexed seller);
     event PaymentApproved(uint256 indexed escrowId, address indexed buyer);
-    event PaymentReleased(uint256 indexed escrowId, address indexed seller, uint256 amount);
-    event DisputeRaised(uint256 indexed escrowId, address indexed raiser, string reason);
-    event DisputeResolved(uint256 indexed escrowId, address indexed arbiter, bool buyerWins);
-    event EscrowRefunded(uint256 indexed escrowId, address indexed buyer, uint256 amount);
+    event PaymentReleased(
+        uint256 indexed escrowId,
+        address indexed seller,
+        uint256 amount
+    );
+    event DisputeRaised(
+        uint256 indexed escrowId,
+        address indexed raiser,
+        string reason
+    );
+    event DisputeResolved(
+        uint256 indexed escrowId,
+        address indexed arbiter,
+        bool buyerWins
+    );
+    event EscrowRefunded(
+        uint256 indexed escrowId,
+        address indexed buyer,
+        uint256 amount
+    );
     event ArbiterAdded(address indexed arbiter);
     event ArbiterRemoved(address indexed arbiter);
     event FeesWithdrawn(address indexed recipient, uint256 amount);
@@ -73,32 +93,32 @@ contract EscrowContract {
         require(msg.sender == platformOwner, "Not platform owner");
         _;
     }
-    
+
     modifier onlyBuyer(uint256 _escrowId) {
         require(msg.sender == escrows[_escrowId].buyer, "Not the buyer");
         _;
     }
-    
+
     modifier onlySeller(uint256 _escrowId) {
         require(msg.sender == escrows[_escrowId].seller, "Not the seller");
         _;
     }
-    
+
     modifier onlyArbiter(uint256 _escrowId) {
         require(msg.sender == escrows[_escrowId].arbiter, "Not the arbiter");
         _;
     }
-    
+
     modifier onlyApprovedArbiter() {
         require(approvedArbiters[msg.sender], "Not an approved arbiter");
         _;
     }
-    
+
     modifier escrowExists(uint256 _escrowId) {
         require(_escrowId < escrowCount, "Escrow does not exist");
         _;
     }
-    
+
     modifier inState(uint256 _escrowId, EscrowState _state) {
         require(escrows[_escrowId].state == _state, "Invalid escrow state");
         _;
@@ -112,11 +132,11 @@ contract EscrowContract {
     constructor(uint256 _arbiterFeePercent, uint256 _platformFeePercent) {
         require(_arbiterFeePercent <= 1000, "Arbiter fee too high"); // Max 10%
         require(_platformFeePercent <= 500, "Platform fee too high"); // Max 5%
-        
+
         platformOwner = msg.sender;
         arbiterFeePercent = _arbiterFeePercent;
         platformFeePercent = _platformFeePercent;
-        
+
         // Platform owner is automatically an approved arbiter
         approvedArbiters[msg.sender] = true;
         emit ArbiterAdded(msg.sender);
@@ -140,12 +160,18 @@ contract EscrowContract {
         require(_arbiter != address(0), "Invalid arbiter address");
         require(approvedArbiters[_arbiter], "Arbiter not approved");
         require(msg.value > 0, "Payment required");
-        require(_deliveryDays > 0 && _deliveryDays <= 365, "Invalid delivery days");
+        require(
+            _deliveryDays > 0 && _deliveryDays <= 365,
+            "Invalid delivery days"
+        );
         require(_seller != msg.sender, "Buyer cannot be seller");
-        require(_arbiter != msg.sender && _arbiter != _seller, "Invalid arbiter");
+        require(
+            _arbiter != msg.sender && _arbiter != _seller,
+            "Invalid arbiter"
+        );
 
         escrowId = escrowCount++;
-        
+
         escrows[escrowId] = Escrow({
             id: escrowId,
             buyer: msg.sender,
@@ -166,7 +192,14 @@ contract EscrowContract {
         sellerEscrows[_seller].push(escrowId);
         arbiterEscrows[_arbiter].push(escrowId);
 
-        emit EscrowCreated(escrowId, msg.sender, _seller, _arbiter, msg.value, _description);
+        emit EscrowCreated(
+            escrowId,
+            msg.sender,
+            _seller,
+            _arbiter,
+            msg.value,
+            _description
+        );
         emit PaymentDeposited(escrowId, msg.sender, msg.value);
     }
 
@@ -174,7 +207,9 @@ contract EscrowContract {
      * @dev Seller confirms delivery
      * @param _escrowId Escrow ID
      */
-    function confirmDelivery(uint256 _escrowId)
+    function confirmDelivery(
+        uint256 _escrowId
+    )
         external
         escrowExists(_escrowId)
         onlySeller(_escrowId)
@@ -188,7 +223,9 @@ contract EscrowContract {
      * @dev Buyer approves payment release
      * @param _escrowId Escrow ID
      */
-    function approvePayment(uint256 _escrowId)
+    function approvePayment(
+        uint256 _escrowId
+    )
         external
         escrowExists(_escrowId)
         onlyBuyer(_escrowId)
@@ -196,7 +233,7 @@ contract EscrowContract {
     {
         escrows[_escrowId].buyerApproved = true;
         emit PaymentApproved(_escrowId, msg.sender);
-        
+
         // Auto-release if both parties agree
         if (escrows[_escrowId].sellerConfirmed) {
             _releasePayment(_escrowId);
@@ -210,13 +247,13 @@ contract EscrowContract {
     function _releasePayment(uint256 _escrowId) internal {
         Escrow storage escrow = escrows[_escrowId];
         escrow.state = EscrowState.COMPLETE;
-        
+
         uint256 amount = escrow.amount;
         uint256 platformFee = (amount * platformFeePercent) / 10000;
         uint256 sellerAmount = amount - platformFee;
-        
+
         platformFees[platformOwner] += platformFee;
-        
+
         payable(escrow.seller).transfer(sellerAmount);
         emit PaymentReleased(_escrowId, escrow.seller, sellerAmount);
     }
@@ -226,13 +263,17 @@ contract EscrowContract {
      * @param _escrowId Escrow ID
      * @param _reason Reason for dispute
      */
-    function raiseDispute(uint256 _escrowId, string memory _reason)
+    function raiseDispute(
+        uint256 _escrowId,
+        string memory _reason
+    )
         external
         escrowExists(_escrowId)
         inState(_escrowId, EscrowState.AWAITING_DELIVERY)
     {
         require(
-            msg.sender == escrows[_escrowId].buyer || msg.sender == escrows[_escrowId].seller,
+            msg.sender == escrows[_escrowId].buyer ||
+                msg.sender == escrows[_escrowId].seller,
             "Only buyer or seller can raise dispute"
         );
         require(bytes(_reason).length > 0, "Dispute reason required");
@@ -249,40 +290,60 @@ contract EscrowContract {
      * @param _escrowId Escrow ID
      * @param _buyerWins Whether buyer wins the dispute
      */
-    function resolveDispute(uint256 _escrowId, bool _buyerWins)
+    function resolveDispute(
+        uint256 _escrowId,
+        bool _buyerWins
+    )
         external
         escrowExists(_escrowId)
         onlyArbiter(_escrowId)
         inState(_escrowId, EscrowState.DISPUTED)
     {
+        _processDisputeResolution(_escrowId, _buyerWins);
+        emit DisputeResolved(_escrowId, msg.sender, _buyerWins);
+    }
+
+    /**
+     * @dev Internal function to process dispute resolution
+     * @param _escrowId Escrow ID
+     * @param _buyerWins Whether buyer wins
+     */
+    function _processDisputeResolution(
+        uint256 _escrowId,
+        bool _buyerWins
+    ) internal {
         Escrow storage escrow = escrows[_escrowId];
-        uint256 amount = escrow.amount;
-        
-        uint256 arbiterFee = (amount * arbiterFeePercent) / 10000;
-        uint256 platformFee = (amount * platformFeePercent) / 10000;
-        uint256 remainingAmount = amount - arbiterFee - platformFee;
-        
+        uint256 totalAmount = escrow.amount;
+
+        // Calculate fees
+        uint256 arbiterFee = (totalAmount * arbiterFeePercent) / 10000;
+        uint256 platformFee = (totalAmount * platformFeePercent) / 10000;
+
+        // Update fee balances
         arbiterFees[escrow.arbiter] += arbiterFee;
         platformFees[platformOwner] += platformFee;
 
+        // Calculate remaining amount
+        uint256 payoutAmount = totalAmount - arbiterFee - platformFee;
+
         if (_buyerWins) {
             escrow.state = EscrowState.REFUNDED;
-            payable(escrow.buyer).transfer(remainingAmount);
-            emit EscrowRefunded(_escrowId, escrow.buyer, remainingAmount);
+            payable(escrow.buyer).transfer(payoutAmount);
+            emit EscrowRefunded(_escrowId, escrow.buyer, payoutAmount);
         } else {
             escrow.state = EscrowState.COMPLETE;
-            payable(escrow.seller).transfer(remainingAmount);
-            emit PaymentReleased(_escrowId, escrow.seller, remainingAmount);
+            payable(escrow.seller).transfer(payoutAmount);
+            emit PaymentReleased(_escrowId, escrow.seller, payoutAmount);
         }
-
-        emit DisputeResolved(_escrowId, msg.sender, _buyerWins);
     }
 
     /**
      * @dev Emergency refund (buyer only, after deadline + grace period)
      * @param _escrowId Escrow ID
      */
-    function emergencyRefund(uint256 _escrowId)
+    function emergencyRefund(
+        uint256 _escrowId
+    )
         external
         escrowExists(_escrowId)
         onlyBuyer(_escrowId)
@@ -297,7 +358,7 @@ contract EscrowContract {
 
         escrow.state = EscrowState.REFUNDED;
         uint256 amount = escrow.amount;
-        
+
         payable(escrow.buyer).transfer(amount);
         emit EscrowRefunded(_escrowId, escrow.buyer, amount);
     }
@@ -309,7 +370,7 @@ contract EscrowContract {
     function addArbiter(address _arbiter) external onlyPlatformOwner {
         require(_arbiter != address(0), "Invalid arbiter address");
         require(!approvedArbiters[_arbiter], "Already approved arbiter");
-        
+
         approvedArbiters[_arbiter] = true;
         emit ArbiterAdded(_arbiter);
     }
@@ -321,7 +382,7 @@ contract EscrowContract {
     function removeArbiter(address _arbiter) external onlyPlatformOwner {
         require(_arbiter != platformOwner, "Cannot remove platform owner");
         require(approvedArbiters[_arbiter], "Not an approved arbiter");
-        
+
         approvedArbiters[_arbiter] = false;
         emit ArbiterRemoved(_arbiter);
     }
@@ -332,16 +393,16 @@ contract EscrowContract {
     function withdrawFees() external {
         uint256 amount = arbiterFees[msg.sender] + platformFees[msg.sender];
         require(amount > 0, "No fees to withdraw");
-        
+
         arbiterFees[msg.sender] = 0;
         platformFees[msg.sender] = 0;
-        
+
         payable(msg.sender).transfer(amount);
         emit FeesWithdrawn(msg.sender, amount);
     }
 
     /**
-     * @dev Get escrow details
+     * @dev Get basic escrow details
      * @param _escrowId Escrow ID
      * @return id Escrow ID
      * @return buyer Buyer address
@@ -349,10 +410,10 @@ contract EscrowContract {
      * @return arbiter Arbiter address
      * @return amount Escrow amount
      * @return state Current state
-     * @return createdAt Creation timestamp
-     * @return deliveryDeadline Delivery deadline
      */
-    function getEscrow(uint256 _escrowId)
+    function getEscrow(
+        uint256 _escrowId
+    )
         external
         view
         escrowExists(_escrowId)
@@ -362,9 +423,7 @@ contract EscrowContract {
             address seller,
             address arbiter,
             uint256 amount,
-            EscrowState state,
-            uint256 createdAt,
-            uint256 deliveryDeadline
+            EscrowState state
         )
     {
         Escrow storage escrow = escrows[_escrowId];
@@ -374,9 +433,34 @@ contract EscrowContract {
             escrow.seller,
             escrow.arbiter,
             escrow.amount,
-            escrow.state,
+            escrow.state
+        );
+    }
+
+    /**
+     * @dev Get escrow timing details
+     * @param _escrowId Escrow ID
+     * @return createdAt Creation timestamp
+     * @return deliveryDeadline Delivery deadline
+     * @return disputeRaisedAt Dispute timestamp (0 if no dispute)
+     */
+    function getEscrowTiming(
+        uint256 _escrowId
+    )
+        external
+        view
+        escrowExists(_escrowId)
+        returns (
+            uint256 createdAt,
+            uint256 deliveryDeadline,
+            uint256 disputeRaisedAt
+        )
+    {
+        Escrow storage escrow = escrows[_escrowId];
+        return (
             escrow.createdAt,
-            escrow.deliveryDeadline
+            escrow.deliveryDeadline,
+            escrow.disputeRaisedAt
         );
     }
 
@@ -389,7 +473,9 @@ contract EscrowContract {
      * @return disputeReason Dispute reason (if any)
      * @return disputeRaisedAt Dispute timestamp
      */
-    function getEscrowStatus(uint256 _escrowId)
+    function getEscrowStatus(
+        uint256 _escrowId
+    )
         external
         view
         escrowExists(_escrowId)
@@ -412,26 +498,36 @@ contract EscrowContract {
     }
 
     /**
-     * @dev Get user's escrows
+     * @dev Get escrows where user is buyer
      * @param _user User address
      * @return buyerEscrowIds Escrows where user is buyer
+     */
+    function getBuyerEscrows(
+        address _user
+    ) external view returns (uint256[] memory buyerEscrowIds) {
+        return buyerEscrows[_user];
+    }
+
+    /**
+     * @dev Get escrows where user is seller
+     * @param _user User address
      * @return sellerEscrowIds Escrows where user is seller
+     */
+    function getSellerEscrows(
+        address _user
+    ) external view returns (uint256[] memory sellerEscrowIds) {
+        return sellerEscrows[_user];
+    }
+
+    /**
+     * @dev Get escrows where user is arbiter
+     * @param _user User address
      * @return arbiterEscrowIds Escrows where user is arbiter
      */
-    function getUserEscrows(address _user)
-        external
-        view
-        returns (
-            uint256[] memory buyerEscrowIds,
-            uint256[] memory sellerEscrowIds,
-            uint256[] memory arbiterEscrowIds
-        )
-    {
-        return (
-            buyerEscrows[_user],
-            sellerEscrows[_user],
-            arbiterEscrows[_user]
-        );
+    function getArbiterEscrows(
+        address _user
+    ) external view returns (uint256[] memory arbiterEscrowIds) {
+        return arbiterEscrows[_user];
     }
 
     /**
@@ -451,7 +547,12 @@ contract EscrowContract {
             uint256 platformFee
         )
     {
-        return (platformOwner, escrowCount, arbiterFeePercent, platformFeePercent);
+        return (
+            platformOwner,
+            escrowCount,
+            arbiterFeePercent,
+            platformFeePercent
+        );
     }
 
     /**
@@ -460,7 +561,9 @@ contract EscrowContract {
      * @return arbiterFeeAmount Available arbiter fees
      * @return platformFeeAmount Available platform fees
      */
-    function getAvailableFees(address _user)
+    function getAvailableFees(
+        address _user
+    )
         external
         view
         returns (uint256 arbiterFeeAmount, uint256 platformFeeAmount)
