@@ -1,0 +1,8 @@
+Compiling 40 files with Solc 0.8.19
+Solc 0.8.19 finished in 2.94s
+Error: Compiler run failed:
+Error (9582): Member "GreetingSet" not found or not visible after argument-dependent lookup in type(contract GreetingContract).
+   --> test/GreetingContract.t.sol:133:14:
+    |
+133 |         emit GreetingContract.GreetingSet(user1, USER1_GREETING, block.timestamp);
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
