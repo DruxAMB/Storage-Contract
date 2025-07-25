@@ -8,6 +8,8 @@ import "../src/StakingContract.sol";
 import "../src/MultiSigWallet.sol";
 import "../src/SimpleToken.sol";
 import "../src/EscrowContract.sol";
+import "../src/SimpleVoting.sol";
+import "../src/EventLogger.sol";
 
 /**
  * @title DeployBase
@@ -56,6 +58,14 @@ contract DeployBase is Script {
         EscrowContract escrow = new EscrowContract(250, 100);
         console.log("EscrowContract deployed to:", address(escrow));
 
+        // Deploy SimpleVoting
+        SimpleVoting voting = new SimpleVoting();
+        console.log("SimpleVoting deployed to:", address(voting));
+
+        // Deploy EventLogger
+        EventLogger eventLogger = new EventLogger();
+        console.log("EventLogger deployed to:", address(eventLogger));
+
         vm.stopBroadcast();
 
         // Log deployment summary
@@ -66,5 +76,7 @@ contract DeployBase is Script {
         console.log("MultiSigWallet:", address(multiSig));
         console.log("SimpleToken:", address(token));
         console.log("EscrowContract:", address(escrow));
+        console.log("SimpleVoting:", address(voting));
+        console.log("EventLogger:", address(eventLogger));
     }
 }
