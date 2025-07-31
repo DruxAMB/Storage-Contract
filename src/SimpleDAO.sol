@@ -15,49 +15,30 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
     enum ProposalState { PENDING, ACTIVE, SUCCEEDED, DEFEATED, EXECUTED, CANCELLED }
     
     // Proposal types
-    enum ProposalType { GENERAL, TREASURY_TRANSFER, ADD_MEMBER, REMOVE_MEMBER, CHANGE_SETTINGS }
+    enum ProposalType { GENERAL, TREASURY_TRANSFER, ADD_MEMBER, REMOVE_MEMBER }
     
-    // Membership types
-    enum MembershipType { TOKEN_BASED, NFT_BASED, MANUAL }
-    
-    // Proposal struct
+    // Proposal struct (simplified to avoid stack issues)
     struct Proposal {
-        uint256 id;
         address proposer;
         string title;
         string description;
         ProposalType proposalType;
-        address target;           // Target address for treasury transfers
-        uint256 amount;          // Amount for treasury transfers
-        bytes data;              // Additional data for execution
+        address target;
+        uint256 amount;
         uint256 startTime;
         uint256 endTime;
         uint256 votesFor;
         uint256 votesAgainst;
-        uint256 votesAbstain;
         bool executed;
         bool cancelled;
         mapping(address => bool) hasVoted;
-        mapping(address => uint256) voteChoice; // 0=against, 1=for, 2=abstain
     }
     
     // Member struct
     struct Member {
         bool isActive;
-        uint256 joinedAt;
         uint256 votingPower;
-        uint256 proposalsCreated;
-        uint256 votesParticipated;
-    }
-    
-    // DAO settings
-    struct DAOSettings {
-        uint256 proposalDuration;      // Duration proposals stay open for voting
-        uint256 minVotingPower;        // Minimum voting power to create proposals
-        uint256 quorumPercentage;      // Percentage of total voting power needed for quorum
-        uint256 majorityPercentage;    // Percentage of votes needed to pass
-        bool requireMembershipToVote;  // Whether only members can vote
-        MembershipType membershipType; // How membership is determined
+        uint256 joinedAt;
     }
     
     // State variables
@@ -65,77 +46,40 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
     uint256 public memberCount;
     uint256 public totalVotingPower;
     
+    // Settings
+    uint256 public proposalDuration = 7 days;
+    uint256 public minVotingPower = 1;
+    uint256 public quorumPercentage = 2500; // 25%
+    uint256 public majorityPercentage = 5000; // 50%
+    
     // Mappings
     mapping(uint256 => Proposal) public proposals;
     mapping(address => Member) public members;
     mapping(address => bool) public isMember;
     
-    // DAO settings
-    DAOSettings public daoSettings;
-    
-    // Governance token (if token-based membership)
+    // Governance token (optional)
     IERC20 public governanceToken;
+    bool public isTokenBased;
     
     // Events
-    event ProposalCreated(
-        uint256 indexed proposalId,
-        address indexed proposer,
-        string title,
-        ProposalType proposalType,
-        uint256 startTime,
-        uint256 endTime
-    );
-    
-    event VoteCast(
-        uint256 indexed proposalId,
-        address indexed voter,
-        uint256 choice,
-        uint256 votingPower
-    );
-    
+    event ProposalCreated(uint256 indexed proposalId, address indexed proposer, string title);
+    event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 votingPower);
     event ProposalExecuted(uint256 indexed proposalId, bool success);
-    event ProposalCancelled(uint256 indexed proposalId);
-    
     event MemberAdded(address indexed member, uint256 votingPower);
     event MemberRemoved(address indexed member);
-    event MemberVotingPowerUpdated(address indexed member, uint256 newVotingPower);
-    
     event TreasuryDeposit(address indexed from, uint256 amount);
-    event TreasuryWithdrawal(address indexed to, uint256 amount);
-    
-    event DAOSettingsUpdated();
     
     /**
      * @dev Constructor
      * @param _governanceToken Address of governance token (use address(0) for manual membership)
-     * @param _proposalDuration Duration in seconds for proposal voting
-     * @param _minVotingPower Minimum voting power required to create proposals
-     * @param _quorumPercentage Percentage of total voting power needed for quorum (basis points)
-     * @param _majorityPercentage Percentage of votes needed to pass (basis points)
      */
-    constructor(
-        address _governanceToken,
-        uint256 _proposalDuration,
-        uint256 _minVotingPower,
-        uint256 _quorumPercentage,
-        uint256 _majorityPercentage
-    ) Ownable() {
-        require(_quorumPercentage <= 10000, "Quorum cannot exceed 100%");
-        require(_majorityPercentage <= 10000, "Majority cannot exceed 100%");
-        require(_proposalDuration > 0, "Proposal duration must be positive");
+    constructor(address _governanceToken) Ownable() {
+        if (_governanceToken != address(0)) {
+            governanceToken = IERC20(_governanceToken);
+            isTokenBased = true;
+        }
         
-        governanceToken = IERC20(_governanceToken);
-        
-        daoSettings = DAOSettings({
-            proposalDuration: _proposalDuration,
-            minVotingPower: _minVotingPower,
-            quorumPercentage: _quorumPercentage,
-            majorityPercentage: _majorityPercentage,
-            requireMembershipToVote: true,
-            membershipType: _governanceToken == address(0) ? MembershipType.MANUAL : MembershipType.TOKEN_BASED
-        });
-        
-        // Add deployer as initial member with voting power
+        // Add deployer as initial member
         _addMember(msg.sender, 1000);
     }
     
@@ -153,7 +97,6 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
      * @param proposalType Type of proposal
      * @param target Target address (for treasury transfers)
      * @param amount Amount (for treasury transfers)
-     * @param data Additional data for execution
      * @return proposalId ID of the created proposal
      */
     function createProposal(
@@ -161,16 +104,11 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
         string memory description,
         ProposalType proposalType,
         address target,
-        uint256 amount,
-        bytes memory data
+        uint256 amount
     ) external returns (uint256 proposalId) {
         require(bytes(title).length > 0, "Title cannot be empty");
-        require(bytes(description).length > 0, "Description cannot be empty");
+        require(getVotingPower(msg.sender) >= minVotingPower, "Insufficient voting power");
         
-        uint256 voterPower = getVotingPower(msg.sender);
-        require(voterPower >= daoSettings.minVotingPower, "Insufficient voting power");
-        
-        // Validate proposal based on type
         if (proposalType == ProposalType.TREASURY_TRANSFER) {
             require(target != address(0), "Target address required");
             require(amount > 0, "Amount must be positive");
@@ -180,28 +118,16 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
         proposalId = proposalCount++;
         
         Proposal storage proposal = proposals[proposalId];
-        proposal.id = proposalId;
         proposal.proposer = msg.sender;
         proposal.title = title;
         proposal.description = description;
         proposal.proposalType = proposalType;
         proposal.target = target;
         proposal.amount = amount;
-        proposal.data = data;
         proposal.startTime = block.timestamp;
-        proposal.endTime = block.timestamp + daoSettings.proposalDuration;
+        proposal.endTime = block.timestamp + proposalDuration;
         
-        // Update member stats
-        members[msg.sender].proposalsCreated++;
-        
-        emit ProposalCreated(
-            proposalId,
-            msg.sender,
-            title,
-            proposalType,
-            proposal.startTime,
-            proposal.endTime
-        );
+        emit ProposalCreated(proposalId, msg.sender, title);
         
         return proposalId;
     }
@@ -209,10 +135,9 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
     /**
      * @dev Cast a vote on a proposal
      * @param proposalId ID of the proposal to vote on
-     * @param choice Vote choice (0=against, 1=for, 2=abstain)
+     * @param support Whether to vote in favor (true) or against (false)
      */
-    function vote(uint256 proposalId, uint256 choice) external nonReentrant {
-        require(choice <= 2, "Invalid vote choice");
+    function vote(uint256 proposalId, bool support) external nonReentrant {
         require(proposalId < proposalCount, "Proposal does not exist");
         
         Proposal storage proposal = proposals[proposalId];
@@ -225,25 +150,15 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
         uint256 voterPower = getVotingPower(msg.sender);
         require(voterPower > 0, "No voting power");
         
-        if (daoSettings.requireMembershipToVote) {
-            require(isMember[msg.sender], "Must be a member to vote");
-        }
-        
         proposal.hasVoted[msg.sender] = true;
-        proposal.voteChoice[msg.sender] = choice;
         
-        if (choice == 0) {
-            proposal.votesAgainst += voterPower;
-        } else if (choice == 1) {
+        if (support) {
             proposal.votesFor += voterPower;
         } else {
-            proposal.votesAbstain += voterPower;
+            proposal.votesAgainst += voterPower;
         }
         
-        // Update member stats
-        members[msg.sender].votesParticipated++;
-        
-        emit VoteCast(proposalId, msg.sender, choice, voterPower);
+        emit VoteCast(proposalId, msg.sender, support, voterPower);
     }
     
     /**
@@ -263,83 +178,15 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
         
         bool success = true;
         
-        // Execute based on proposal type
         if (proposal.proposalType == ProposalType.TREASURY_TRANSFER) {
             success = _executeTreasuryTransfer(proposal.target, proposal.amount);
         } else if (proposal.proposalType == ProposalType.ADD_MEMBER) {
-            _addMember(proposal.target, proposal.amount); // amount = voting power
+            _addMember(proposal.target, proposal.amount);
         } else if (proposal.proposalType == ProposalType.REMOVE_MEMBER) {
             _removeMember(proposal.target);
-        } else if (proposal.proposalType == ProposalType.CHANGE_SETTINGS) {
-            // Custom execution logic would go here
-            success = true;
         }
         
         emit ProposalExecuted(proposalId, success);
-    }
-    
-    /**
-     * @dev Cancel a proposal (only proposer or owner)
-     * @param proposalId ID of the proposal to cancel
-     */
-    function cancelProposal(uint256 proposalId) external {
-        require(proposalId < proposalCount, "Proposal does not exist");
-        
-        Proposal storage proposal = proposals[proposalId];
-        require(
-            msg.sender == proposal.proposer || msg.sender == owner(),
-            "Only proposer or owner can cancel"
-        );
-        require(!proposal.executed, "Cannot cancel executed proposal");
-        require(!proposal.cancelled, "Already cancelled");
-        
-        proposal.cancelled = true;
-        
-        emit ProposalCancelled(proposalId);
-    }
-    
-    /**
-     * @dev Add a member manually (owner only, for manual membership type)
-     * @param member Address of the new member
-     * @param votingPower Voting power to assign
-     */
-    function addMember(address member, uint256 votingPower) external onlyOwner {
-        require(daoSettings.membershipType == MembershipType.MANUAL, "Not manual membership");
-        _addMember(member, votingPower);
-    }
-    
-    /**
-     * @dev Remove a member manually (owner only, for manual membership type)
-     * @param member Address of the member to remove
-     */
-    function removeMember(address member) external onlyOwner {
-        require(daoSettings.membershipType == MembershipType.MANUAL, "Not manual membership");
-        _removeMember(member);
-    }
-    
-    /**
-     * @dev Update DAO settings (owner only)
-     * @param newProposalDuration New proposal duration
-     * @param newMinVotingPower New minimum voting power
-     * @param newQuorumPercentage New quorum percentage
-     * @param newMajorityPercentage New majority percentage
-     */
-    function updateDAOSettings(
-        uint256 newProposalDuration,
-        uint256 newMinVotingPower,
-        uint256 newQuorumPercentage,
-        uint256 newMajorityPercentage
-    ) external onlyOwner {
-        require(newQuorumPercentage <= 10000, "Quorum cannot exceed 100%");
-        require(newMajorityPercentage <= 10000, "Majority cannot exceed 100%");
-        require(newProposalDuration > 0, "Proposal duration must be positive");
-        
-        daoSettings.proposalDuration = newProposalDuration;
-        daoSettings.minVotingPower = newMinVotingPower;
-        daoSettings.quorumPercentage = newQuorumPercentage;
-        daoSettings.majorityPercentage = newMajorityPercentage;
-        
-        emit DAOSettingsUpdated();
     }
     
     /**
@@ -352,33 +199,18 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
         
         Proposal storage proposal = proposals[proposalId];
         
-        if (proposal.cancelled) {
-            return ProposalState.CANCELLED;
-        }
+        if (proposal.cancelled) return ProposalState.CANCELLED;
+        if (proposal.executed) return ProposalState.EXECUTED;
+        if (block.timestamp <= proposal.endTime) return ProposalState.ACTIVE;
         
-        if (proposal.executed) {
-            return ProposalState.EXECUTED;
-        }
+        uint256 totalVotes = proposal.votesFor + proposal.votesAgainst;
+        uint256 quorumRequired = (totalVotingPower * quorumPercentage) / 10000;
         
-        if (block.timestamp <= proposal.endTime) {
-            return ProposalState.ACTIVE;
-        }
+        if (totalVotes < quorumRequired) return ProposalState.DEFEATED;
         
-        // Check if proposal passed
-        uint256 totalVotes = proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain;
-        uint256 quorumRequired = (totalVotingPower * daoSettings.quorumPercentage) / 10000;
+        uint256 majorityRequired = (totalVotes * majorityPercentage) / 10000;
         
-        if (totalVotes < quorumRequired) {
-            return ProposalState.DEFEATED;
-        }
-        
-        uint256 majorityRequired = (totalVotes * daoSettings.majorityPercentage) / 10000;
-        
-        if (proposal.votesFor >= majorityRequired) {
-            return ProposalState.SUCCEEDED;
-        } else {
-            return ProposalState.DEFEATED;
-        }
+        return proposal.votesFor >= majorityRequired ? ProposalState.SUCCEEDED : ProposalState.DEFEATED;
     }
     
     /**
@@ -387,54 +219,51 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
      * @return Voting power of the address
      */
     function getVotingPower(address account) public view returns (uint256) {
-        if (daoSettings.membershipType == MembershipType.TOKEN_BASED && address(governanceToken) != address(0)) {
+        if (isTokenBased && address(governanceToken) != address(0)) {
             return governanceToken.balanceOf(account);
-        } else {
-            return members[account].votingPower;
         }
+        return members[account].votingPower;
     }
     
     /**
-     * @dev Get proposal details
-     * @param proposalId ID of the proposal
-     * @return Proposal details
+     * @dev Add a member manually (owner only, for manual membership type)
+     * @param member Address of the new member
+     * @param votingPower Voting power to assign
      */
-    function getProposal(uint256 proposalId) external view returns (
-        uint256 id,
-        address proposer,
-        string memory title,
-        string memory description,
-        ProposalType proposalType,
-        address target,
-        uint256 amount,
-        uint256 startTime,
-        uint256 endTime,
-        uint256 votesFor,
-        uint256 votesAgainst,
-        uint256 votesAbstain,
-        bool executed,
-        bool cancelled
-    ) {
-        require(proposalId < proposalCount, "Proposal does not exist");
+    function addMember(address member, uint256 votingPower) external onlyOwner {
+        require(!isTokenBased, "Not manual membership");
+        _addMember(member, votingPower);
+    }
+    
+    /**
+     * @dev Remove a member manually (owner only, for manual membership type)
+     * @param member Address of the member to remove
+     */
+    function removeMember(address member) external onlyOwner {
+        require(!isTokenBased, "Not manual membership");
+        _removeMember(member);
+    }
+    
+    /**
+     * @dev Update DAO settings (owner only)
+     * @param newProposalDuration New proposal duration
+     * @param newMinVotingPower New minimum voting power
+     * @param newQuorumPercentage New quorum percentage
+     * @param newMajorityPercentage New majority percentage
+     */
+    function updateSettings(
+        uint256 newProposalDuration,
+        uint256 newMinVotingPower,
+        uint256 newQuorumPercentage,
+        uint256 newMajorityPercentage
+    ) external onlyOwner {
+        require(newQuorumPercentage <= 10000, "Quorum cannot exceed 100%");
+        require(newMajorityPercentage <= 10000, "Majority cannot exceed 100%");
         
-        Proposal storage proposal = proposals[proposalId];
-        
-        return (
-            proposal.id,
-            proposal.proposer,
-            proposal.title,
-            proposal.description,
-            proposal.proposalType,
-            proposal.target,
-            proposal.amount,
-            proposal.startTime,
-            proposal.endTime,
-            proposal.votesFor,
-            proposal.votesAgainst,
-            proposal.votesAbstain,
-            proposal.executed,
-            proposal.cancelled
-        );
+        proposalDuration = newProposalDuration;
+        minVotingPower = newMinVotingPower;
+        quorumPercentage = newQuorumPercentage;
+        majorityPercentage = newMajorityPercentage;
     }
     
     /**
@@ -456,13 +285,45 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
     }
     
     /**
-     * @dev Get vote choice of an address for a proposal
+     * @dev Get basic proposal info
      * @param proposalId ID of the proposal
-     * @param voter Address to check
-     * @return Vote choice (0=against, 1=for, 2=abstain)
+     * @return proposer Address of proposer
+     * @return title Proposal title
+     * @return proposalType Type of proposal
+     * @return target Target address
+     * @return amount Amount for transfers
      */
-    function getVoteChoice(uint256 proposalId, address voter) external view returns (uint256) {
-        return proposals[proposalId].voteChoice[voter];
+    function getProposalInfo(uint256 proposalId) external view returns (
+        address proposer,
+        string memory title,
+        ProposalType proposalType,
+        address target,
+        uint256 amount
+    ) {
+        require(proposalId < proposalCount, "Proposal does not exist");
+        Proposal storage proposal = proposals[proposalId];
+        return (proposal.proposer, proposal.title, proposal.proposalType, proposal.target, proposal.amount);
+    }
+    
+    /**
+     * @dev Get proposal voting info
+     * @param proposalId ID of the proposal
+     * @return startTime Voting start time
+     * @return endTime Voting end time
+     * @return votesFor Votes in favor
+     * @return votesAgainst Votes against
+     * @return executed Whether executed
+     */
+    function getProposalVotes(uint256 proposalId) external view returns (
+        uint256 startTime,
+        uint256 endTime,
+        uint256 votesFor,
+        uint256 votesAgainst,
+        bool executed
+    ) {
+        require(proposalId < proposalCount, "Proposal does not exist");
+        Proposal storage proposal = proposals[proposalId];
+        return (proposal.startTime, proposal.endTime, proposal.votesFor, proposal.votesAgainst, proposal.executed);
     }
     
     /**
@@ -477,10 +338,8 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
         isMember[member] = true;
         members[member] = Member({
             isActive: true,
-            joinedAt: block.timestamp,
             votingPower: votingPower,
-            proposalsCreated: 0,
-            votesParticipated: 0
+            joinedAt: block.timestamp
         });
         
         memberCount++;
@@ -519,11 +378,6 @@ contract SimpleDAO is ReentrancyGuard, Ownable {
         require(amount <= address(this).balance, "Insufficient balance");
         
         (bool success, ) = payable(to).call{value: amount}("");
-        
-        if (success) {
-            emit TreasuryWithdrawal(to, amount);
-        }
-        
         return success;
     }
 }

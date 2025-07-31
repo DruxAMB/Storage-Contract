@@ -54,3 +54,73 @@ Set up recurring payment schedules
 Auto-payments from approved accounts
 Pause/resume subscription functionality
 Tiered subscription levels
+9. 📋 SimpleRegistry
+Purpose: Basic name/value registry system Features:
+
+Register key-value pairs (name → address, name → string)
+Update your own registrations
+Public lookup functionality
+Transfer ownership of registrations
+10. 🎯 SimpleBetting
+Purpose: Basic betting pool for events Features:
+
+Create betting pools with two outcomes
+Place bets on either side
+Resolve outcomes and distribute winnings
+Simple odds calculation
+11. 🏪 SimpleStore
+Purpose: Basic on-chain marketplace for digital items Features:
+
+List items for sale with prices
+Purchase items with ETH
+Transfer ownership automatically
+Simple inventory management
+12. 📊 SimplePoll
+Purpose: Basic voting/polling system Features:
+
+Create polls with multiple options
+Cast votes (one per address)
+View real-time results
+Set voting deadlines
+13. 💝 SimpleGifting
+Purpose: Send ETH gifts with messages Features:
+
+Send ETH with attached messages
+Recipients can claim gifts
+Public gift board/wall
+Unclaimed gift recovery
+14. 🎲 SimpleLottery
+Purpose: Basic lottery system Features:
+
+Buy lottery tickets with ETH
+Random winner selection
+Automatic prize distribution
+Multiple rounds support
+15. 📝 SimpleWill
+Purpose: Basic digital inheritance Features:
+
+Set beneficiaries and inheritance amounts
+Require periodic "proof of life" check-ins
+Automatic distribution after inactivity period
+Emergency recovery options
+16. 🔒 SimpleTimelock
+Purpose: Time-locked ETH storage Features:
+
+Lock ETH for specific time periods
+Early withdrawal penalties
+Multiple lock periods
+Interest/reward calculations
+17. 🎪 SimpleFaucet
+Purpose: ETH faucet for testing Features:
+
+Distribute small amounts of ETH
+Rate limiting per address
+Refillable by owner
+Usage statistics
+18. 📱 SimpleMessaging
+Purpose: On-chain messaging system Features:
+
+Send messages to addresses
+Public and private message boards
+Message history
+Tip/payment for messages
